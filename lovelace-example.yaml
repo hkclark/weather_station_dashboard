@@ -1,0 +1,66 @@
+# Example Lovelace dashboard configuration for the WS-5000 Weather Station Card
+# Add this to your dashboard's raw YAML configuration editor or a lovelace YAML file
+
+# --------------------------------------------------------------------------
+# OPTION 1: Paste directly into a dashboard card (via "Add Card" → Manual)
+# --------------------------------------------------------------------------
+type: custom:ws5000-weather-card
+
+# Outdoor
+outdoor_temp: sensor.outdoor_temperature
+outdoor_humidity: sensor.outdoor_humidity
+feels_like: sensor.feels_like_temperature
+dew_point: sensor.dew_point
+
+# Indoor
+indoor_temp: sensor.indoor_temperature
+indoor_humidity: sensor.indoor_humidity
+
+# Wind
+wind_speed: sensor.wind_speed
+wind_gust: sensor.wind_gust
+wind_direction: sensor.wind_direction          # cardinal string preferred
+wind_direction_degrees: sensor.wind_direction_degrees
+
+# Pressure
+pressure: sensor.barometric_pressure
+pressure_trend: sensor.pressure_trend
+
+# Rain
+rain_rate: sensor.rain_rate
+rain_today: sensor.rain_today
+rain_weekly: sensor.rain_weekly
+rain_monthly: sensor.rain_monthly
+rain_yearly: sensor.rain_yearly
+
+# UV & Solar
+uv_index: sensor.uv_index
+solar_radiation: sensor.solar_radiation
+
+# Battery (optional)
+battery_outdoor: sensor.outdoor_battery
+
+# --------------------------------------------------------------------------
+# OPTION 2: Ambient Weather Network integration entity names
+# Replace "my_station" with your actual station prefix
+# --------------------------------------------------------------------------
+# type: custom:ws5000-weather-card
+# outdoor_temp: sensor.my_station_temperature
+# outdoor_humidity: sensor.my_station_humidity
+# feels_like: sensor.my_station_feelslike
+# dew_point: sensor.my_station_dewpoint
+# indoor_temp: sensor.my_station_tempinf
+# indoor_humidity: sensor.my_station_humidityin
+# wind_speed: sensor.my_station_windspeedmph
+# wind_gust: sensor.my_station_windgustmph
+# wind_direction: sensor.my_station_winddir
+# wind_direction_degrees: sensor.my_station_winddir
+# pressure: sensor.my_station_baromrelin
+# rain_rate: sensor.my_station_hourlyrainin
+# rain_today: sensor.my_station_dailyrainin
+# rain_weekly: sensor.my_station_weeklyrainin
+# rain_monthly: sensor.my_station_monthlyrainin
+# rain_yearly: sensor.my_station_yearlyrainin
+# uv_index: sensor.my_station_uv
+# solar_radiation: sensor.my_station_solarradiation
+# battery_outdoor: sensor.my_station_batt1

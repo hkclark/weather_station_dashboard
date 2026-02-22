@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WS-5000 Preview</title>
+<style>
+  body { background:#111; display:flex; justify-content:center; padding:24px; margin:0; }
+  .wrapper { max-width:720px; width:100%; }
+  h2 { color:#2a5a5a; font-size:10px; letter-spacing:3px; text-transform:uppercase; text-align:center; margin-bottom:12px; font-family:monospace; }
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <h2>Ambient Weather WS-5000 · Home Assistant Card Preview (Mock Data)</h2>
+  <div id="mount"></div>
+</div>
+<script src="ws5000-weather-card.js"></script>
+<script>
+const card = document.createElement('ws5000-weather-card');
+card.setConfig({
+  outdoor_temp:'s.ot', outdoor_temp_high:'s.oh', outdoor_temp_low:'s.ol',
+  outdoor_humidity:'s.ohu', feels_like:'s.fl', dew_point:'s.dp',
+  wind_speed:'s.ws', wind_gust:'s.wg', wind_direction:'s.wd', wind_direction_degrees:'s.wdd',
+  wind_avg_10min:'s.w10', wind_max_daily:'s.wmd',
+  indoor_temp:'s.it', indoor_humidity:'s.ih',
+  pressure_abs:'s.pa', pressure_trend:'s.pt', pressure_change:'s.pc',
+  rain_rate:'s.rr', rain_event:'s.re', rain_hourly:'s.rh',
+  rain_daily:'s.rd', rain_weekly:'s.rw', rain_monthly:'s.rm', rain_yearly:'s.ry',
+  uv_index:'s.uv', solar_radiation:'s.sr',
+  pm25_outdoor:'s.po', pm25_indoor:'s.pi',
+  soil_moisture:'s.sm',
+  lightning_distance:'s.ld', lightning_count:'s.lc', lightning_time:'s.lt',
+});
+card.hass = { states: {
+  's.ot':  { state:'81.7', attributes:{unit_of_measurement:'°F'} },
+  's.oh':  { state:'81.9', attributes:{unit_of_measurement:'°F'} },
+  's.ol':  { state:'77.7', attributes:{unit_of_measurement:'°F'} },
+  's.ohu': { state:'72',   attributes:{unit_of_measurement:'%'} },
+  's.fl':  { state:'83.6', attributes:{unit_of_measurement:'°F'} },
+  's.dp':  { state:'67.5', attributes:{unit_of_measurement:'°F'} },
+  's.ws':  { state:'2.0',  attributes:{unit_of_measurement:'mph'} },
+  's.wg':  { state:'2.6',  attributes:{unit_of_measurement:'mph'} },
+  's.wd':  { state:'E',    attributes:{} },
+  's.wdd': { state:'90',   attributes:{} },
+  's.w10': { state:'2.3',  attributes:{unit_of_measurement:'mph'} },
+  's.wmd': { state:'2.6',  attributes:{unit_of_measurement:'mph'} },
+  's.it':  { state:'80.7', attributes:{unit_of_measurement:'°F'} },
+  's.ih':  { state:'60',   attributes:{unit_of_measurement:'%'} },
+  's.pa':  { state:'29.80',attributes:{unit_of_measurement:'inHg'} },
+  's.pt':  { state:'falling', attributes:{} },
+  's.pc':  { state:'0.01', attributes:{unit_of_measurement:'inHg'} },
+  's.rr':  { state:'0.03', attributes:{unit_of_measurement:'in'} },
+  's.re':  { state:'1.01', attributes:{unit_of_measurement:'in'} },
+  's.rh':  { state:'1.02', attributes:{unit_of_measurement:'in'} },
+  's.rd':  { state:'0.21', attributes:{unit_of_measurement:'in'} },
+  's.rw':  { state:'1.03', attributes:{unit_of_measurement:'in'} },
+  's.rm':  { state:'1.05', attributes:{unit_of_measurement:'in'} },
+  's.ry':  { state:'1.05', attributes:{unit_of_measurement:'in'} },
+  's.uv':  { state:'8',    attributes:{} },
+  's.sr':  { state:'0.010',attributes:{unit_of_measurement:'w/m²'} },
+  's.po':  { state:'21',   attributes:{unit_of_measurement:'ug/m³'} },
+  's.pi':  { state:'26',   attributes:{unit_of_measurement:'ug/m³'} },
+  's.sm':  { state:'13',   attributes:{unit_of_measurement:'%'} },
+  's.ld':  { state:'10',   attributes:{unit_of_measurement:'km'} },
+  's.lc':  { state:'6',    attributes:{} },
+  's.lt':  { state:'15',   attributes:{} },
+}};
+document.getElementById('mount').appendChild(card);
+</script>
+</body>
+</html>
