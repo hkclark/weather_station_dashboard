@@ -54,6 +54,48 @@ class WS5000WeatherCard extends HTMLElement {
   set hass(hass) { this._hass = hass; this.render(); }
   getCardSize() { return 10; }
 
+  // Native card dimensions (width x height in px at 1:1 scale)
+  static get CARD_W() { return 660; }
+  static get CARD_H() { return 480; }
+
+  connectedCallback() {
+    this._setupScaling();
+  }
+
+  _setupScaling() {
+    if (this._resizeObserver) return; // already set up
+    this._resizeObserver = new ResizeObserver(() => this._applyScale());
+    this._resizeObserver.observe(this);
+    // Also handle screen rotation / browser resize
+    this._winResizeHandler = () => this._applyScale();
+    window.addEventListener('resize', this._winResizeHandler);
+    this._applyScale();
+  }
+
+  _applyScale() {
+    const cfg = this._config || {};
+    if (!cfg.scale_to_fit) return;
+
+    // Use viewport dimensions so we fill the full screen
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const scaleX = vw / WS5000WeatherCard.CARD_W;
+    const scaleY = vh / WS5000WeatherCard.CARD_H;
+    const scale = Math.min(scaleX, scaleY); // letterbox — preserve aspect ratio
+
+    const wrapper = this.shadowRoot && this.shadowRoot.querySelector('.ws-scale-wrapper');
+    if (wrapper) {
+      wrapper.style.transform = `scale(${scale})`;
+      wrapper.style.transformOrigin = 'top left';
+      wrapper.style.width = WS5000WeatherCard.CARD_W + 'px';
+      // Set host size so HA doesn't add scrollbars
+      this.style.width  = vw + 'px';
+      this.style.height = (WS5000WeatherCard.CARD_H * scale) + 'px';
+      this.style.overflow = 'hidden';
+      this.style.display = 'block';
+    }
+  }
+
   _s(entityId, decimals = 1, fallback = '--') {
     if (!entityId || !this._hass) return fallback;
     const st = this._hass.states[entityId];
@@ -334,6 +376,12 @@ class WS5000WeatherCard extends HTMLElement {
       :host { display:block; font-family:'Roboto',sans-serif; }
       * { box-sizing:border-box; margin:0; padding:0; }
 
+      /* Scale-to-fit wrapper — used when scale_to_fit: true */
+      .ws-scale-wrapper {
+        display: inline-block;
+        transform-origin: top left;
+      }
+
       .ws { background:#000; border:3px solid #0a1a1a; border-radius:6px; color:#ccc; overflow:hidden; user-select:none; min-width:600px; }
 
       /* TOP BAR */
@@ -473,6 +521,7 @@ class WS5000WeatherCard extends HTMLElement {
       .sun-t { color:#b0a040; font-weight:700; }
     </style>
 
+    <div class="ws-scale-wrapper">
     <div class="ws">
 
       <!-- TOP BAR -->
@@ -610,14 +659,21 @@ class WS5000WeatherCard extends HTMLElement {
       </div>
 
     </div>
+    </div>
     `;
 
     if (this._timeInterval) clearInterval(this._timeInterval);
     this._timeInterval = setInterval(() => this.render(), 1000);
+
+    // Re-apply scaling after every render since innerHTML was replaced
+    this._setupScaling();
+    requestAnimationFrame(() => this._applyScale());
   }
 
   disconnectedCallback() {
     if (this._timeInterval) clearInterval(this._timeInterval);
+    if (this._resizeObserver) { this._resizeObserver.disconnect(); this._resizeObserver = null; }
+    if (this._winResizeHandler) { window.removeEventListener('resize', this._winResizeHandler); }
   }
 }
 
