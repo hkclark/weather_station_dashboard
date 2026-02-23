@@ -5,14 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Weather Station Card — Preview</title>
 <style>
-  body { background:#0a0f0f; display:flex; justify-content:center; padding:24px; margin:0; min-height:100vh; }
+  body { background:#0a0f0f; display:flex; justify-content:center; padding:24px; margin:0; }
   .wrapper { max-width:720px; width:100%; }
   h2 { color:#2a6a6a; font-size:10px; letter-spacing:3px; text-transform:uppercase; text-align:center; margin-bottom:14px; font-family:monospace; }
+  p  { color:#2a5a5a; font-size:10px; text-align:center; margin-bottom:12px; font-family:monospace; }
 </style>
 </head>
 <body>
 <div class="wrapper">
   <h2>Weather Station Card — Mock Data Preview</h2>
+  <p>In Home Assistant, graphs pull live history from the HA recorder. Preview uses seeded data.</p>
   <div id="mount"></div>
 </div>
 <script>
@@ -28,6 +30,7 @@ class WS5000WeatherCard extends HTMLElement {
     this._config = {};
     this._hass = null;
     this._timeInterval = null;
+    this._historyInterval = null; // periodic HA history refresh
     this._resizeObserver = null;
     this._winResizeHandler = null;
     this._history = {};         // { entityId: [{t, v}, ...] }
@@ -75,6 +78,8 @@ class WS5000WeatherCard extends HTMLElement {
   setConfig(config) {
     this._config = config;
     this.render();
+    // Start fetching history from HA — first call is immediate
+    this._scheduleHistoryRefresh();
   }
 
   set hass(hass) {
@@ -85,13 +90,15 @@ class WS5000WeatherCard extends HTMLElement {
 
   getCardSize() { return 10; }
 
-  // ── History ───────────────────────────────────────────────────────────────
+  // ── History via HA history API ────────────────────────────────────────────
 
   _recordHistory() {
+    // No-op: history is now loaded from HA via _fetchHistory()
+    // We still add the current value as the latest data point so
+    // the graph stays current between API refreshes.
     if (!this._hass || !this._config) return;
     const cfg = this._config;
     const now = Date.now();
-    const WINDOW = 12 * 3600 * 1000;
     const eids = [
       cfg.outdoor_temp, cfg.outdoor_humidity, cfg.feels_like, cfg.dew_point,
       cfg.wind_speed, cfg.wind_gust, cfg.indoor_temp, cfg.indoor_humidity,
@@ -108,16 +115,82 @@ class WS5000WeatherCard extends HTMLElement {
       if (isNaN(v)) continue;
       if (!this._history[eid]) this._history[eid] = [];
       const arr = this._history[eid];
-      // Sample at most once every 30 seconds
+      // Append current value if different from last point (avoid duplicates)
       if (arr.length === 0 || now - arr[arr.length - 1].t >= 30000) {
         arr.push({ t: now, v });
       }
-      // Purge points older than 12 h
-      const cutoff = now - WINDOW;
-      let i = 0;
-      while (i < arr.length && arr[i].t < cutoff) i++;
-      if (i > 0) arr.splice(0, i);
     }
+  }
+
+  // Fetch 12h of history from HA for all tracked entities in one API call.
+  // Called once on setConfig and then every 5 minutes to keep data fresh.
+  async _fetchHistory() {
+    if (!this._hass || !this._config) return;
+    const cfg = this._config;
+
+    const eids = [
+      cfg.outdoor_temp, cfg.outdoor_humidity, cfg.feels_like, cfg.dew_point,
+      cfg.wind_speed, cfg.wind_gust, cfg.indoor_temp, cfg.indoor_humidity,
+      cfg.pressure_abs, cfg.rain_rate, cfg.rain_daily,
+      cfg.uv_index, cfg.solar_radiation,
+      cfg.rain_event, cfg.rain_hourly, cfg.rain_weekly, cfg.rain_monthly, cfg.rain_yearly,
+      cfg.wind_avg_10min, cfg.wind_max_daily,
+    ].filter(Boolean);
+
+    if (eids.length === 0) return;
+
+    const now = new Date();
+    const start = new Date(now.getTime() - 12 * 3600 * 1000);
+    // ISO 8601 format required by HA history API
+    const startStr = start.toISOString();
+    const endStr   = now.toISOString();
+    const entityList = eids.join(',');
+
+    try {
+      // callApi(method, path, parameters) — path is relative to /api/
+      const results = await this._hass.callApi(
+        'GET',
+        `history/period/${startStr}?filter_entity_id=${entityList}&end_time=${endStr}&minimal_response=true&no_attributes=true`
+      );
+
+      // results is an array of arrays: one inner array per entity
+      // Each item: { entity_id, state, last_changed }
+      if (!Array.isArray(results)) return;
+
+      for (const entityHistory of results) {
+        if (!Array.isArray(entityHistory) || entityHistory.length === 0) continue;
+        const eid = entityHistory[0].entity_id;
+        if (!eid) continue;
+
+        // Convert to our {t, v} format, dropping non-numeric states
+        const points = [];
+        for (const item of entityHistory) {
+          const v = parseFloat(item.state);
+          if (isNaN(v)) continue;
+          const t = new Date(item.last_changed).getTime();
+          if (!isNaN(t)) points.push({ t, v });
+        }
+
+        if (points.length > 0) {
+          // Sort by time (should already be sorted but be safe)
+          points.sort((a, b) => a.t - b.t);
+          this._history[eid] = points;
+        }
+      }
+    } catch (err) {
+      // API call failed (e.g. no permission, recorder disabled) — fall back
+      // silently to the locally-accumulated data already in this._history
+      console.warn('WeatherStationCard: history API error', err);
+    }
+  }
+
+  // Schedule periodic history refreshes (every 5 minutes)
+  _scheduleHistoryRefresh() {
+    if (this._historyInterval) return; // already scheduled
+    // Initial fetch immediately
+    this._fetchHistory();
+    // Then every 5 minutes
+    this._historyInterval = setInterval(() => this._fetchHistory(), 5 * 60 * 1000);
   }
 
   // ── Scaling ───────────────────────────────────────────────────────────────
@@ -156,7 +229,8 @@ class WS5000WeatherCard extends HTMLElement {
   }
 
   disconnectedCallback() {
-    if (this._timeInterval) clearInterval(this._timeInterval);
+    if (this._timeInterval)   clearInterval(this._timeInterval);
+    if (this._historyInterval) clearInterval(this._historyInterval);
     if (this._resizeObserver) { this._resizeObserver.disconnect(); this._resizeObserver = null; }
     if (this._winResizeHandler) window.removeEventListener('resize', this._winResizeHandler);
     if (this._graphTimeout) clearTimeout(this._graphTimeout);
@@ -436,7 +510,9 @@ class WS5000WeatherCard extends HTMLElement {
     this._graphLabel  = label;
     this._graphUnit   = unit;
     this._resetGraphTimer();
+    // Show immediately with whatever data we have, then refresh from HA
     this._updateOverlay();
+    this._fetchHistory().then(() => this._updateOverlay());
   }
 
   _closeGraph() {
@@ -861,6 +937,7 @@ window.customCards.push({
 
 customElements.whenDefined('ws5000-weather-card').then(() => {
   const card = document.createElement('ws5000-weather-card');
+
   card.setConfig({
     outdoor_temp:'s.ot', outdoor_temp_high:'s.oh', outdoor_temp_low:'s.ol',
     outdoor_humidity:'s.ohu', feels_like:'s.fl', dew_point:'s.dp',
@@ -874,12 +951,34 @@ customElements.whenDefined('ws5000-weather-card').then(() => {
     pm25_outdoor:'s.po', pm25_indoor:'s.pi', soil_moisture:'s.sm',
   });
 
-  // Seed fake 12h history so sparklines render immediately
+  // Override _fetchHistory so it doesn't try to call HA API in a preview context;
+  // instead we seed realistic fake data for all tracked entities.
   const now = Date.now();
+  const mkSeries = (base, amp, noise, n=144) =>
+    Array.from({length:n}, (_,i) => ({
+      t: now - (n-i) * 300000,  // 5-min intervals → 12h
+      v: Math.max(0, base + Math.sin(i/12)*amp + (Math.random()-0.5)*noise)
+    }));
+
   card._history = {
-    's.ot': Array.from({length:72}, (_,i) => ({ t: now-(72-i)*600000, v: 78 + Math.sin(i/10)*4 + Math.random()*0.6 })),
-    's.ws': Array.from({length:72}, (_,i) => ({ t: now-(72-i)*600000, v: Math.max(0, 2 + Math.abs(Math.sin(i/6))*4 + Math.random()*0.5) })),
+    's.ot':  mkSeries(81, 4,   0.4),
+    's.ohu': mkSeries(72, 5,   1.0),
+    's.fl':  mkSeries(83, 3.5, 0.4),
+    's.dp':  mkSeries(67, 2,   0.3),
+    's.ws':  mkSeries(2,  2,   0.5),
+    's.wg':  mkSeries(3,  2.5, 0.6),
+    's.it':  mkSeries(80, 1.5, 0.2),
+    's.ih':  mkSeries(60, 4,   0.8),
+    's.pa':  mkSeries(29.8, 0.1, 0.02),
+    's.rr':  mkSeries(0.01, 0.03, 0.005),
+    's.rd':  mkSeries(0.15, 0.08, 0.01),
+    's.uv':  mkSeries(5, 4, 0.5),
+    's.sr':  mkSeries(300, 280, 20),
   };
+
+  // No-op the API fetch and schedule since we have pre-seeded data
+  card._fetchHistory = async () => {};
+  card._scheduleHistoryRefresh = () => {};
 
   card.hass = { states: {
     's.ot':  { state:'81.7', attributes:{unit_of_measurement:'°F'} },
@@ -912,6 +1011,7 @@ customElements.whenDefined('ws5000-weather-card').then(() => {
     's.pi':  { state:'26',   attributes:{unit_of_measurement:'µg/m³'} },
     's.sm':  { state:'13',   attributes:{unit_of_measurement:'%'} },
   }};
+
   document.getElementById('mount').appendChild(card);
 });
 </script>
