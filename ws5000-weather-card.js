@@ -76,24 +76,37 @@ class WS5000WeatherCard extends HTMLElement {
     const cfg = this._config || {};
     if (!cfg.scale_to_fit) return;
 
-    // Use viewport dimensions so we fill the full screen
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const scaleX = vw / WS5000WeatherCard.CARD_W;
     const scaleY = vh / WS5000WeatherCard.CARD_H;
     const scale = Math.min(scaleX, scaleY); // letterbox — preserve aspect ratio
 
+    // Scaled card dimensions
+    const scaledW = WS5000WeatherCard.CARD_W * scale;
+    const scaledH = WS5000WeatherCard.CARD_H * scale;
+
+    // Offset to center within the viewport
+    const offsetX = Math.max(0, (vw - scaledW) / 2);
+    const offsetY = Math.max(0, (vh - scaledH) / 2);
+
     const wrapper = this.shadowRoot && this.shadowRoot.querySelector('.ws-scale-wrapper');
     if (wrapper) {
-      wrapper.style.transform = `scale(${scale})`;
       wrapper.style.transformOrigin = 'top left';
+      wrapper.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
       wrapper.style.width = WS5000WeatherCard.CARD_W + 'px';
-      // Set host size so HA doesn't add scrollbars
-      this.style.width  = vw + 'px';
-      this.style.height = (WS5000WeatherCard.CARD_H * scale) + 'px';
-      this.style.overflow = 'hidden';
-      this.style.display = 'block';
     }
+
+    // Make the host element fill the full viewport
+    this.style.position = 'fixed';
+    this.style.top = '0';
+    this.style.left = '0';
+    this.style.width  = vw + 'px';
+    this.style.height = vh + 'px';
+    this.style.overflow = 'hidden';
+    this.style.display = 'block';
+    this.style.background = '#000'; // fills letterbox bars with black
+    this.style.zIndex = '1';
   }
 
   _s(entityId, decimals = 1, fallback = '--') {
